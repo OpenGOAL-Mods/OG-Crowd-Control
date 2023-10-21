@@ -20,7 +20,7 @@
 (define *last-twitch-message* string)
 
 ;;Activate effects randomly to test them before twitch chat integration is done.
-(define *use-effect-timer* #f)
+(define *use-effect-timer* #t)
 
 (deftype command (structure)
 ((name string)
@@ -43,13 +43,21 @@
 (define *command-info* (new 'static 'command-info))
 
 (defun set-command-param ((self command) (name string) (on-func (function none)) (off-func (function none)) (index int) (cooldown int) (duration int)(enabled? symbol))
+
+(if (> index NUM_COMMANDS)
+(return #f)
+)
 (set! (-> self name) (new 'global 'string 15 (the-as string #f)) );; now you can have at most 128 characters of a string, but you are eating away at global memory
 (copy-string<-string (-> self name) name)
 (set! (-> self on-func) on-func)
 (set! (-> self off-func) off-func)
 (set! (-> self index) index)
 (set! (-> self cooldown) cooldown)
+(if (> duration 30) 
+(set! (and (-> self duration) *use-effect-timer*) 30)
 (set! (-> self duration) duration)
+
+)
 (set! (-> self enabled?) enabled?)
 (set! (-> self active?) #f)
 ;;set active to false as everything will be false on boot
@@ -75,7 +83,8 @@
     )
 (set-command-param (-> *command-info* commands 2) 
     "fastjak" 
-    (lambda () (set! (-> *walk-mods* target-speed) 77777.0)(set! (-> *double-jump-mods* target-speed) 77777.0)(set! (-> *jump-mods* target-speed) 77777.0)(set! (-> *jump-attack-mods* target-speed) 77777.0)(set! (-> *attack-mods* target-speed) 77777.0)(set! (-> *forward-high-jump-mods* target-speed) 77777.0)(set! (-> *jump-attack-mods* target-speed) 77777.0)(set! (-> *stone-surface* target-speed) 1.25) (none))
+    (lambda () (set! (-> *walk-mods* target-speed) 77777.0) (none))
+    ;;(lambda () (send-event *target* 'loading )(format #t "poop")(none))
     (lambda () (set! (-> *walk-mods* target-speed) 40960.0)(set! (-> *double-jump-mods* target-speed) 32768.0)(set! (-> *jump-mods* target-speed) 40960.0)(set! (-> *jump-attack-mods* target-speed) 24576.0)(set! (-> *attack-mods* target-speed) 40960.0)(set! (-> *forward-high-jump-mods* target-speed) 45056.0)(set! (-> *jump-attack-mods* target-speed) 24576.0)(set! (-> *stone-surface* target-speed) 1.0) (none))
     2
     120 ;;120
@@ -295,7 +304,7 @@
     
     (let ((y-pos 50))
   
-        (dotimes (i NUM_COMMANDS)
+    (dotimes (i NUM_COMMANDS)
     (if (and (-> *command-info* commands i active?) (!= i 0))
     (begin 
         (with-dma-buffer-add-bucket ((buf (-> (current-frame) global-buf))
@@ -309,6 +318,8 @@
     ;;Then remove some y value so we arent on top of each other
     (set! y-pos (+ y-pos 30))
     )
+
+
     ;;print to screen at location x
     )
     )
@@ -322,6 +333,30 @@
     
 
     
+(none)
+)
+
+(defun disable-all-efffects()
+    "This process finds active effects, and prints them to the screen"
+   
+    
+    (let ((y-pos 50))
+  
+    (dotimes (i NUM_COMMANDS)
+    (if (and (-> *command-info* commands i active?) (!= i 0))
+    (begin 
+
+    (set! (-> *command-info* commands i active?) #f)
+    (set! (-> *command-info* commands i enabled-time) 0)
+    ((-> *command-info* commands i off-func))
+    )
+
+
+    ;;print to screen at location x
+    )
+    )
+     
+    )    
 (none)
 )
 
@@ -340,14 +375,14 @@
     (while #t
     ;;Sleep this process for the effect activation time 
     (let ((current-timea (current-time)))
-        (until (time-elapsed? current-timea (seconds 20))
+        (until (time-elapsed? current-timea (seconds 10))
 
 
 
         (with-dma-buffer-add-bucket ((buf (-> (current-frame) global-buf))
                                       (bucket-id subtitle))
       (draw-string-xy (string-format "Rolling in: ~D ~%"
-                                     (- (- (current-time) current-timea) (seconds 20)))
+                                     (- (- (current-time) current-timea) (seconds 10)))
       
                       buf 0 188 (font-color red) (font-flags shadow kerning)))
 
@@ -355,13 +390,13 @@
         )
     )
     
-    
+    (disable-all-efffects)
     ;;activate 3 random effects
     (dotimes (i 3)
     ;;Get a random index
     (let ((rand-val (knuth-rand-int-range 1 NUM_COMMANDS)))
     ;;TODO check if its already active if so roll again
-    (while (not( valid-command? rand-val))
+    (while (or (not ( valid-command? rand-val) ) (= rand-val 1))
     (format #t "command is not valid rolling a new one")
     (set! rand-val (knuth-rand-int-range 1 NUM_COMMANDS))
     )
