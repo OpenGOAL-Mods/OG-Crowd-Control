@@ -4,7 +4,7 @@
     ;; name: mod-custom-code.gc
     ;; name in dgo: mod-custom-code
     ;; dgos: TODO
-
+    (defun-extern set-up-command-info none)
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; What is this file for.
@@ -20,10 +20,11 @@
     ;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; Begin function defintions.
     ;;;;;;;;;;;;;;;;;;;;;;;;;;
-
+(defun-extern print-active-effects)
     (defun runs-every-frame ()
       ;;(increase-power-cell-by-one) This is a call to increase-power-cell-by-one defined in mod-common-functions.gc
-      
+      ;;this is hack fix this process somehow?
+      (process-spawn-function process print-active-effects)
       (if *show-input-display* 
         (input-display-on)
         (input-display-off)
@@ -107,8 +108,24 @@
       (none)
       )
 
+#|(when (not (process-by-name 'button-proc *active-pool*))
+    ;process-spawn-function, spawns a process that runs the function you give it
+    (process-spawn-function process :name 'button-proc
+
+    |#
+
+(define-extern *use-effect-timer* symbol)
+(define-extern activate-effects-timed (function none :behavior process))
     (defun runs-on-jak-spawn ()
       ;; Code here runs every time jak spawns (loading a file new game or death)   
+      (set-up-command-info)
+      
+      ;;if timer test is true, then spawn the timer process
+      (if (and *use-effect-timer* (not (process-by-name 'activate-effects-timed-proc *active-pool*)))
+        (process-spawn-function process activate-effects-timed :name 'activate-effects-timed-proc)
+      )
+      
+
       (none)
       )
 

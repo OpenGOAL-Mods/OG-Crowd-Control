@@ -2089,6 +2089,7 @@
  "mods/mod-settings.gc"
  "mods/mod-common-functions.gc"
  "mods/mod-custom-code.gc"
+ "mods/crowd-control.gc"
 )
 
 (group-list "all-code"
