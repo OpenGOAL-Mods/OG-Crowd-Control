@@ -1,0 +1,424 @@
+;; -*-Lisp-*-
+(in-package goal)
+
+;; Name: crowd-control.gc
+;; Name in dgo: crowd-control.gc
+;; DGOs: TODO
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Types.
+;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+#|
+    Each command has an on function, an off function, an index, a cooldown,
+    an enabled/disabled status, and an active/inactive status.
+|#
+
+(defconstant NUM_COMMANDS 26)
+;; Store the last Twitch message in a string
+(define *last-twitch-message* string)
+;; Activate effects randomly to test them before Twitch chat integration is done
+(define *use-effect-timer* #t)
+
+(deftype command (structure)
+  ((name string)
+   (on-func (function none))
+   (off-func (function none))
+   (index int)
+   (cooldown int)
+   (duration int)
+   (enabled? symbol)
+   (active? symbol)
+   (enabled-time int)))
+
+(deftype command-info (structure)
+  ((commands command NUM_COMMANDS :inline :offset-assert 0)))
+
+(define *command-info* (new 'static 'command-info))
+
+(defun set-command-param ((self command)
+                          (name string)
+                          (on-func (function none))
+                          (off-func (function none))
+                          (index int)
+                          (cooldown int)
+                          (duration int)
+                          (enabled? symbol))
+  "Sets the parameters for a command object."
+  (if (> index NUM_COMMANDS)
+      (return #f))
+  
+  (set! (-> self name) (new 'global 'string 15 (the-as string #f)))
+  (copy-string<-string (-> self name) name)
+  
+  (set! (-> self on-func) on-func)
+  (set! (-> self off-func) off-func)
+  (set! (-> self index) index)
+  (set! (-> self cooldown) cooldown)
+  
+  ;; Ensure duration is within acceptable range
+  ;; (if (> duration 30) 
+  ;;   (set! (-> self duration) 30)
+  ;; )
+  (set! (-> self duration) duration)
+  
+  (set! (-> self enabled?) enabled?)
+  (set! (-> self active?) #f)
+  
+  ;; Set active to false as everything will be false on boot
+  (none))
+
+(defun set-up-command-info ()
+"This function runs on startup, and it checks if command-info has been setup. If command-info is not set up then it sets it up"
+(if (= (-> *command-info* commands 1 name) 0)
+(begin
+;; Command info has not been setup so lets set it up
+;;setup functions with set-command-param command name on-func off-func index cooldown duration enabled?
+(set-command-param (-> *command-info* commands 1) 
+    "superjump" 
+    (lambda () (set! (-> *TARGET-bank* jump-height-max)(meters 15.0))(set! (-> *TARGET-bank* jump-height-min)(meters 5.0))(set! (-> *TARGET-bank* double-jump-height-max)(meters 15.0))(set! (-> *TARGET-bank* double-jump-height-min)(meters 5.0)) (none))
+    (lambda () (set! (-> *TARGET-bank* jump-height-max)(meters 3.5))(set! (-> *TARGET-bank* jump-height-min)(meters 1.01))(set! (-> *TARGET-bank* double-jump-height-max)(meters 2.5))(set! (-> *TARGET-bank* double-jump-height-min)(meters 1)) (none))
+    1
+    30
+    20
+    #t
+    )
+(set-command-param (-> *command-info* commands 2) 
+    "fastjak" 
+    (lambda () (set! (-> *walk-mods* target-speed) 77777.0)(set! (-> *double-jump-mods* target-speed) 77777.0)(set! (-> *jump-mods* target-speed) 77777.0)(set! (-> *jump-attack-mods* target-speed) 77777.0)(set! (-> *attack-mods* target-speed) 77777.0)(set! (-> *forward-high-jump-mods* target-speed) 77777.0)(set! (-> *jump-attack-mods* target-speed) 77777.0)(set! (-> *stone-surface* target-speed) 1.25) (none))
+    ;;(lambda () (send-event *target* 'loading )(format #t "poop")(none))
+    (lambda () (set! (-> *walk-mods* target-speed) 40960.0)(set! (-> *double-jump-mods* target-speed) 32768.0)(set! (-> *jump-mods* target-speed) 40960.0)(set! (-> *jump-attack-mods* target-speed) 24576.0)(set! (-> *attack-mods* target-speed) 40960.0)(set! (-> *forward-high-jump-mods* target-speed) 45056.0)(set! (-> *jump-attack-mods* target-speed) 24576.0)(set! (-> *stone-surface* target-speed) 1.0) (none))
+    2
+    120
+    20
+    #t
+    )
+(set-command-param (-> *command-info* commands 3) 
+    "slowjak" 
+    (lambda () (send-event *target* 'reset-pickup 'eco)(set! (-> *walk-mods* target-speed) 22000.0)(set! (-> *double-jump-mods* target-speed) 20000.0)(set! (-> *jump-mods* target-speed) 22000.0)(set! (-> *jump-attack-mods* target-speed) 20000.0)(set! (-> *attack-mods* target-speed) 22000.0)(set! (-> *stone-surface* target-speed) 1.0)(set! (-> *TARGET-bank* wheel-flip-dist) (meters 7))(set! (-> *TARGET-bank* wheel-flip-height) (meters 3.52)) (none))
+    (lambda () (set! (-> *walk-mods* target-speed) 40960.0) (set! (-> *double-jump-mods* target-speed) 32768.0) (set! (-> *jump-mods* target-speed) 40960.0) (set! (-> *jump-attack-mods* target-speed) 24576.0) (set! (-> *attack-mods* target-speed) 40960.0) (set! (-> *forward-high-jump-mods* target-speed) 45056.0) (set! (-> *jump-attack-mods* target-speed) 24576.0) (set! (-> *TARGET-bank* wheel-flip-dist) (meters 17.3)) (set! (-> *TARGET-bank* wheel-flip-height) (meters 3.52)) (none))
+    3
+    240
+    20
+    #t
+    )
+(set-command-param (-> *command-info* commands 4) 
+    "superboosted" 
+    (lambda () (set! (-> *edge-surface* fric) 1.0) (none))
+    (lambda () (set! (-> *edge-surface* fric) 30720.0) (none))
+    4
+    30
+    120
+    #t
+    )
+(set-command-param (-> *command-info* commands 5) 
+    "noboosteds" 
+    (lambda () (set! (-> *edge-surface* fric) 1530000.0) (none))
+    (lambda () (set! (-> *edge-surface* fric) 30720.0) (none))
+    5
+    180
+    120
+    #t
+    )
+(set-command-param (-> *command-info* commands 6) 
+    "nojumps" 
+    (lambda () (logior! (-> *target* state-flags) (state-flags prevent-jump)) (none))
+    (lambda () (logclear! (-> *target* state-flags) (state-flags prevent-jump)) (none))
+    6
+    420
+    60
+    #t
+    )
+(set-command-param (-> *command-info* commands 7) 
+    "pacifist" 
+    (lambda () (set! (-> *TARGET-bank* punch-radius) (meters -1.0))(set! (-> *TARGET-bank* spin-radius) (meters -1.0))(set! (-> *TARGET-bank* flop-radius) (meters -1.0))(set! (-> *TARGET-bank* uppercut-radius) (meters -1.0)) (none))
+    (lambda () (set! (-> *TARGET-bank* punch-radius) (meters 1.3))(set! (-> *TARGET-bank* spin-radius) (meters 2.2))(set! (-> *TARGET-bank* flop-radius) (meters 1.4))(set! (-> *TARGET-bank* uppercut-radius) (meters 1)) (none))
+    7
+    240
+    60
+    #t
+    )
+(set-command-param (-> *command-info* commands 8) 
+    "shortfall" 
+    (lambda () (set! (-> *TARGET-bank* fall-far) (meters 2.5))(set! (-> *TARGET-bank* fall-far-inc) (meters 3.5)) (none))
+    (lambda () (set! (-> *TARGET-bank* fall-far) (meters 30))(set! (-> *TARGET-bank* fall-far-inc) (meters 20)) (none))
+    8
+    300
+    60
+    #t
+    )
+(set-command-param (-> *command-info* commands 9) 
+    "ghostjak" 
+    (lambda () (set! (-> *TARGET-bank* body-radius) (meters -1.0)) (none))
+    (lambda () (set! (-> *TARGET-bank* body-radius) (meters 0.7)) (none))
+    9
+    360
+    3
+    #t
+    )
+(set-command-param (-> *command-info* commands 10) 
+    "rocketman" 
+    (lambda () (set! (-> *standard-dynamics* gravity-normal y) -0.5) (none))
+    (lambda () (set! (-> *standard-dynamics* gravity-normal y) 1.0) (none))
+    10
+    360
+    5
+    #t
+    )
+(set-command-param (-> *command-info* commands 11) 
+    "noeco" 
+    (lambda () (send-event *target* 'reset-pickup 'eco)(set! (-> *FACT-bank* eco-full-timeout) (seconds 0.0)) (none))
+    (lambda () (set! (-> *FACT-bank* eco-full-timeout) (seconds 20.0)) (none))
+    11
+    160
+    10
+    #t
+    )
+(set-command-param (-> *command-info* commands 12) 
+    "freecam" 
+    (lambda () (stop 'debug) (none))
+    (lambda () (start 'play (get-or-create-continue! *game-info*)) (none))
+    12
+    300
+    6
+    #t
+    )
+(set-command-param (-> *command-info* commands 13) 
+    "dark" 
+    (lambda () (set! (-> (level-get-target-inside *level*) mood-func)update-mood-finalboss) (none))
+    (lambda () (set! (-> (level-get-target-inside *level*) mood-func)update-mood-darkcave) (none))
+    13
+    240
+    30
+    #t
+    )
+(set-command-param (-> *command-info* commands 14) 
+    "nodax" 
+    (lambda () (send-event *target* 'sidekick #f) (none))
+    (lambda () (send-event *target* 'sidekick #t) (none))
+    14
+    20
+    45
+    #t
+    )
+(set-command-param (-> *command-info* commands 15) 
+    "smallnet" 
+    (lambda () (when (process-by-ename "fisher-1")(set!(-> *FISHER-bank* net-radius)(meters 0.0))) (none))
+    (lambda () (when (process-by-ename "fisher-1")(set! (-> *FISHER-bank* net-radius)(meters 0.7))) (none))
+    15
+    45
+    10
+    #t
+    )
+(set-command-param (-> *command-info* commands 16) 
+    "widefish" 
+    (lambda () (when (process-by-ename "fisher-1")(set! (-> *FISHER-bank* width)(meters 10.0))) (none))
+    (lambda () (when (process-by-ename "fisher-1")(set! (-> *FISHER-bank* width)(meters 3.3))) (none))
+    16
+    45
+    4
+    #t
+    )
+(set-command-param (-> *command-info* commands 17) 
+    "lowpoly" 
+    (lambda () (set! (-> *pc-settings* lod-force-tfrag) 2)(set! (-> *pc-settings* lod-force-tie) 3)(set! (-> *pc-settings* lod-force-ocean) 2)(set! (-> *pc-settings* lod-force-actor) 3) (none))
+    (lambda () (set! (-> *pc-settings* lod-force-tfrag) 0)(set! (-> *pc-settings* lod-force-tie) 0)(set! (-> *pc-settings* lod-force-ocean) 0)(set! (-> *pc-settings* lod-force-actor) 0) (none))
+    17
+    30
+    60
+    #t
+    )
+(set-command-param (-> *command-info* commands 18) 
+    "nodax" 
+    (lambda () (send-event *target* 'sidekick #f) (none))
+    (lambda () (send-event *target* 'sidekick #t) (none))
+    18
+    20
+    45
+    #t
+    )
+(set-command-param (-> *command-info* commands 19) 
+    "noactors" 
+    (lambda () (set! *spawn-actors* #f) (reset-actors 'debug) (none))
+    (lambda () (set! *spawn-actors* #t) (reset-actors 'debug) (none))
+    19
+    20
+    20
+    #t
+    )
+(set-command-param (-> *command-info* commands 20) 
+    "slippery" 
+    (lambda () (set! (-> *stone-surface* slope-slip-angle) 16384.0)(set! (-> *stone-surface* slip-factor) 0.7)(set! (-> *stone-surface* transv-max) 1.5)(set! (-> *stone-surface* turnv) 0.5)(set! (-> *stone-surface* nonlin-fric-dist) 4091904.0)(set! (-> *stone-surface* fric) 23756.8)(set! (-> *grass-surface* slope-slip-angle) 16384.0)(set! (-> *grass-surface* slip-factor) 0.7)(set! (-> *grass-surface* transv-max) 1.5)(set! (-> *grass-surface* turnv) 0.5)(set! (-> *grass-surface* nonlin-fric-dist) 4091904.0)(set! (-> *grass-surface* fric) 23756.8)(set! (-> *ice-surface* slip-factor) 0.3)(set! (-> *ice-surface* nonlin-fric-dist) 8183808.0)(set! (-> *ice-surface* fric) 11878.4) (none))
+    (lambda () (set! (-> *stone-surface* slope-slip-angle) 8192.0)(set! (-> *stone-surface* slip-factor) 1.0)(set! (-> *stone-surface* transv-max) 1.0)(set! (-> *stone-surface* turnv) 1.0)(set! (-> *stone-surface* nonlin-fric-dist) 5120.0)(set! (-> *stone-surface* fric) 153600.0)(set! (-> *grass-surface* slope-slip-angle) 16384.0)(set! (-> *grass-surface* slip-factor) 1.0)(set! (-> *grass-surface* transv-max) 1.0)(set! (-> *grass-surface* turnv) 1.0)(set! (-> *grass-surface* nonlin-fric-dist) 4096.0)(set! (-> *grass-surface* fric) 122880.0)(set! (-> *ice-surface* slip-factor) 0.7)(set! (-> *ice-surface* nonlin-fric-dist) 4091904.0)(set! (-> *ice-surface* fric) 23756.8) (none))
+    20
+    20
+    20
+    #t
+    )
+(set-command-param (-> *command-info* commands 21)
+    "pinball"
+    (lambda () (set! (-> *stone-surface* fric) -153600.0) (none))
+    (lambda () (set! (-> *stone-surface* fric) 153600.0) (none))
+    21
+    20
+    10
+    #t
+    )
+(set-command-param (-> *command-info* commands 22)
+    "mirror"
+    (lambda () (begin (logior! (-> *pc-settings* cheats) (pc-cheats mirror)) (logclear! (-> *pc-settings* cheats-known) (pc-cheats mirror))) (none))
+    (lambda () (logclear! (-> *pc-settings* cheats) (pc-cheats mirror)) (none))
+    22
+    20
+    20
+    #t
+    )
+(set-command-param (-> *command-info* commands 23)
+    "spiderman"
+    (lambda () (set! (-> *pat-mode-info* 1 wall-angle) 0.0) (set! (-> *pat-mode-info* 2 wall-angle) 0.0) (none))
+    (lambda () (set! (-> *pat-mode-info* 1 wall-angle) 2.0) (set! (-> *pat-mode-info* 2 wall-angle) 0.82) (none))
+    23
+    20
+    20
+    #t
+    )
+(set-command-param (-> *command-info* commands 24)
+    "rapidfire"
+    (lambda () (set! (-> *TARGET-bank* yellow-projectile-speed) (meters 100))(set! (-> *TARGET-bank* yellow-attack-timeout) (seconds 0)) (none))
+    (lambda () (set! (-> *TARGET-bank* yellow-projectile-speed) (meters 60))(set! (-> *TARGET-bank* yellow-attack-timeout) (seconds 0.2)) (none))
+    23
+    20
+    20
+    #t
+    )
+(set-command-param (-> *command-info* commands 25)
+    "noledge"
+    (lambda () (set! (-> *collide-edge-work* max-dir-cosa-delta) 999.0) (none))
+    (lambda () (set! (-> *collide-edge-work* max-dir-cosa-delta) 0.6) (none))
+    23
+    20
+    20
+    #t
+    )
+(set-command-param (-> *command-info* commands 26)
+    "noduck"
+    (lambda () (logior! (-> *target* state-flags) (state-flags prevent-duck)) (none))
+    (lambda () (logclear! (-> *target* state-flags) (state-flags prevent-duck)) (none))
+    26
+    20
+    20
+    #t
+    )
+)
+
+    ;; Command info has been setup lets just return
+        (return #f)
+       )
+(none)
+)
+
+(defun valid-command? ((i int))
+  "Takes in an int and returns a boolean if the command can be activated."
+  (let* ((cmd-info (-> *command-info* commands i))
+         (on-cooldown? (and (<= (-> cmd-info enabled-time) (-> cmd-info cooldown))
+                            (> (-> cmd-info enabled-time) 0)))
+         (already-active? (-> cmd-info active?)))
+    (not (or on-cooldown? already-active?))))
+
+(defbehavior cooldown-timer process ((i int))
+  "Track the cooldown independently once the command is activated."
+  (let ((local-time 0))
+    (while (<= local-time (-> (-> *command-info* commands i) cooldown))
+      (set! local-time (+ local-time 1))
+      (set! (-> (-> *command-info* commands i) enabled-time) local-time)
+      (let ((current-timea (current-time)))
+        (until (time-elapsed? current-timea (seconds 1))
+          (suspend)))))
+  (none))
+
+(defbehavior effect-proc process ((i int))
+  "Activate the given effect in command-info by index."
+  (when (valid-command? i)
+    (set! (-> (-> *command-info* commands i) active?) #t)
+    ((-> (-> *command-info* commands i) on-func))
+    (process-spawn-function process cooldown-timer i)
+    (let ((duration-time 0))
+      (while (< duration-time (-> (-> *command-info* commands i) duration))
+        (set! duration-time (+ duration-time 1))
+        (set! (-> (-> *command-info* commands i) enabled-time) duration-time)
+        (let ((current-timea (current-time)))
+          (until (time-elapsed? current-timea (seconds 1))
+            (suspend)))))
+    (when (-> (-> *command-info* commands i) off-func)
+      ((-> (-> *command-info* commands i) off-func)))
+    (set! (-> (-> *command-info* commands i) active?) #f))
+  (none))
+
+(defbehavior print-active-effects process ()
+  "This process finds active effects and prints them to the screen."
+  (let ((y-pos 50))
+    (dotimes (i NUM_COMMANDS)
+      (when (and (-> (-> *command-info* commands i) active?)
+                 (not (= i 0)))
+        (with-dma-buffer-add-bucket ((buf (-> (current-frame) global-buf))
+                                      (bucket-id subtitle))
+          (draw-string-xy (string-format "~S: ~D"
+                                         (-> (-> *command-info* commands i) name)
+                                         (- (-> (-> *command-info* commands i) duration)
+                                            (-> (-> *command-info* commands i) enabled-time)))
+                          buf 0 y-pos (font-color green) (font-flags shadow kerning)))
+        (set! y-pos (+ y-pos 8))))))
+
+(defun disable-all-effects ()
+  "Disable all active effects and reset their enabled time."
+  (dotimes (i NUM_COMMANDS)
+    (when (and (-> (-> *command-info* commands i) active?)
+               (not (= i 0)))
+      (set! (-> (-> *command-info* commands i) active?) #f)
+      (set! (-> (-> *command-info* commands i) enabled-time) 0)
+      ((-> (-> *command-info* commands i) off-func)))))
+
+(defbehavior update-last-message process ()
+  "Monitor a given chat, then return the last message and update it in a global."
+  (while #t
+    ;; Implementation needed
+    )
+  (none))
+
+(defbehavior activate-effects-timed process ()
+  "This process activates a random effect every x amount of time."
+  (while #t
+    (let ((current-timea (current-time)))
+      (until (time-elapsed? current-timea (seconds 5))
+        (with-dma-buffer-add-bucket ((buf (-> (current-frame) global-buf))
+                                      (bucket-id subtitle))
+          (draw-string-xy (string-format "Rolling in: ~D ~%"
+                                         (/ (* -1 (- (- (current-time) current-timea) (seconds 5))) 300))
+                          buf 0 188 (font-color red) (font-flags shadow kerning)))
+        (suspend)))
+    ;; (disable-all-effects)
+    ;; Activate 3 random effects
+    (dotimes (i 1)
+      (let ((rand-val (knuth-rand-int-range 1 NUM_COMMANDS)))
+        ;; TODO: Check if it's already active, if so, roll again
+        ;; (while (not (valid-command? rand-val))
+        ;;   (format #t "Command is not valid, rolling a new one")
+        ;;   (set! rand-val (knuth-rand-int-range 1 NUM_COMMANDS)))
+        (format #t "Spawning process cooldown timer")
+        (process-spawn-function process effect-proc rand-val)
+        (format #t "Turning on process: ~S~%" (-> (-> *command-info* commands rand-val) name))
+        (format #t "Duration for process: ~S is ~D ~%" (-> (-> *command-info* commands rand-val) name)
+                (-> (-> *command-info* commands rand-val) duration))
+        (suspend))))
+  (none))
+
+
+
+
+
+
+
+;;usefull stuff
+;;    (format #t " Enabled time is ~D ~%"(-> *command-info* commands i enabled-time) )
+;;    (format #t " Cooldown time is ~D ~%" (-> *command-info* commands i cooldown))
+;;    (format #t " Are we currently on cooldown? ~A ~%" (< (-> *command-info* commands i enabled-time) (-> *command-info* commands i cooldown)))
